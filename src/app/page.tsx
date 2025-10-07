@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import SearchResultLine from "./_components/searchResultLine/searchResultLine";
 import { useSearchParams } from "next/navigation";
 
+const DEBOUNCE_TIMEOUT = 200;
+const MINIMUM_QUERY_LENGTH = 3;
+
 export default function SearchPage() {
   const searchParams = useSearchParams();
 
@@ -19,8 +22,8 @@ export default function SearchPage() {
 
   useEffect(() => {
     window.history.replaceState({}, "", `?q=${encodeURIComponent(query)}`);
-
-    if (query.length < 3) {
+    setSearchedQuery("")
+    if (query.length < MINIMUM_QUERY_LENGTH) {
       setPersons([]);
       return;
     }
@@ -33,7 +36,7 @@ export default function SearchPage() {
 
       const controller = new AbortController();
       controllerRef.current = controller;
-      setSearchedQuery("")
+
       setLoading(true);
       try {
         const res = await fetch(`/api/persons?q=${encodeURIComponent(query)}`, {
@@ -50,7 +53,7 @@ export default function SearchPage() {
       } finally {
         setLoading(false);
       }
-    }, 200);
+    }, DEBOUNCE_TIMEOUT);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -69,14 +72,16 @@ export default function SearchPage() {
         <div className="persons-list">
           {loading ? (
             <p className={styles.loadingSearch}>Загрузка...</p>
-          ) : persons.length === 0 && searchedQuery != "" ? <p>Данных нет</p> : (
-            <ul>
-              {persons
-                .map((person, index) => (
-                  <SearchResultLine key={index} query={searchedQuery} name={person} />
-                ))}
-            </ul>
-          )}
+          ) : query.length < MINIMUM_QUERY_LENGTH ?
+            <p>Введите минимум 3 символа</p>
+            : persons.length === 0 && searchedQuery.length >= MINIMUM_QUERY_LENGTH ? <p>Данных нет</p> : (
+              <ul>
+                {persons
+                  .map((person, index) => (
+                    <SearchResultLine key={index} query={searchedQuery} name={person} />
+                  ))}
+              </ul>
+            )}
         </div>
       </main>
       <footer className={styles.footer}>
