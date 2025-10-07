@@ -1,94 +1,86 @@
-import Image from "next/image";
+"use client";
 import styles from "./page.module.css";
+import { useEffect, useRef, useState } from "react";
+import SearchResultLine from "./_components/searchResultLine/searchResultLine";
+import { useSearchParams } from "next/navigation";
 
-export default function Home() {
+export default function SearchPage() {
+  const searchParams = useSearchParams();
+
+  const initialQuery = searchParams.get("q") || "";
+  const [query, setQuery] = useState(initialQuery);
+  const [searchedQuery, setSearchedQuery] = useState("");
+
+  const [persons, setPersons] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const controllerRef = useRef<AbortController | null>(null);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    window.history.replaceState({}, "", `?q=${encodeURIComponent(query)}`);
+
+    if (query.length < 3) {
+      setPersons([]);
+      return;
+    }
+
+    //debouncing - to avoid unnessery request while user doesn't finish his request
+    if (debounceRef.current) { clearTimeout(debounceRef.current) }
+
+    debounceRef.current = setTimeout(async () => {
+      if (controllerRef.current) controllerRef.current.abort();
+
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      setSearchedQuery("")
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/persons?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
+
+        if (!res.ok) throw new Error("Request failed");
+        const data = await res.json();
+        setPersons(data);
+        setSearchedQuery(query)
+      } catch (err: any) {
+        if (err.name === "AbortError") return;
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }, 200);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>src/app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
+        <h1 className={styles.titlePage}>Поиск сотрудников</h1>
+        <div className={styles.searchBox}>
+          <input type="text" className={styles.searchInput} value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск..." />
+        </div>
+        <div className="persons-list">
+          {loading ? (
+            <p className={styles.loadingSearch}>Загрузка...</p>
+          ) : persons.length === 0 && searchedQuery != "" ? <p>Данных нет</p> : (
+            <ul>
+              {persons
+                .map((person, index) => (
+                  <SearchResultLine key={index} query={searchedQuery} name={person} />
+                ))}
+            </ul>
+          )}
         </div>
       </main>
       <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+        <p>Тестовое задание для Notix. 07.10.25</p>
       </footer>
     </div>
   );
